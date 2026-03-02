@@ -1,15 +1,23 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongoose";
 import Order from "@/models/Order";
+import { TANUKU_AREAS } from "@/lib/locations";
 
 export async function POST(req: Request) {
     try {
         await dbConnect();
         const body = await req.json();
 
+        const deliveryArea = body.deliveryArea || body.hubName;
+
         // Basic Validation
-        if (!body.userPhone || !body.userAddress || !body.hubName || !body.quantity) {
+        if (!body.userPhone || !body.userAddress || !deliveryArea || !body.quantity) {
             return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 });
+        }
+
+        const areaDetails = TANUKU_AREAS.find(a => a.name === deliveryArea);
+        if (!areaDetails) {
+            return NextResponse.json({ success: false, error: "Invalid delivery area selected" }, { status: 400 });
         }
 
         // Server-side price calculation to prevent tampering
@@ -26,11 +34,17 @@ export async function POST(req: Request) {
         const newOrder = await Order.create({
             userPhone: body.userPhone,
             userAddress: body.userAddress,
-            hubName: body.hubName,
+            deliveryArea: deliveryArea,
+            deliveryLocation: {
+                lat: areaDetails.lat,
+                lng: areaDetails.lng
+            },
+            hubName: deliveryArea,
             quantity: Number(body.quantity),
             upsells: body.upsells || [],
             totalAmount: calculatedTotal,
             status: "Pending",
+            forTomorrow: body.forTomorrow === true,
         });
 
         return NextResponse.json({ success: true, data: newOrder }, { status: 201 });

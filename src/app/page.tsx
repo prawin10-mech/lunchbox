@@ -5,24 +5,17 @@ import HubSelector from "@/components/HubSelector";
 import HomeMenu from "@/components/HomeMenu";
 import Checkout from "@/components/Checkout";
 import Success from "@/components/Success";
-import MissedCutoff from "@/components/MissedCutoff";
 import { useState, useEffect } from "react";
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState("splash");
   const [selectedHub, setSelectedHub] = useState("");
   const [cartCount, setCartCount] = useState(1);
-  const [upsells, setUpsells] = useState<string[]>([]);
-  const [isPastCutoff, setIsPastCutoff] = useState(false);
+  const [forTomorrow, setForTomorrow] = useState(false);
   const [hubsData, setHubsData] = useState([]);
   const [isOrdering, setIsOrdering] = useState(false);
 
   useEffect(() => {
-    // Determine if we are past 10:00 AM (local time simulate)
-    const hour = new Date().getHours();
-    if (hour >= 10 && hour < 14) { // Only enforce cutoff between 10 AM and 2 PM
-      // setIsPastCutoff(true); // Uncomment to test missed cutoff locally
-    }
 
     // Fetch Tanuku Hubs
     fetch('/api/hubs')
@@ -43,17 +36,18 @@ export default function App() {
 
   const handleSelectHub = (hub: string) => {
     setSelectedHub(hub);
-    setCurrentScreen(isPastCutoff ? "missed" : "home");
+    setCurrentScreen("home");
   };
 
-  const handleProceedToCheckout = (quantity: number) => {
+  const handleProceedToCheckout = (quantity: number, isTomorrow: boolean = false) => {
     setCartCount(quantity);
+    setForTomorrow(isTomorrow);
     setCurrentScreen("checkout");
   };
 
   const [createdOrderId, setCreatedOrderId] = useState("");
 
-  const handleCompleteOrder = async (userDetails: { userPhone: string, userAddress: string }) => {
+  const handleCompleteOrder = async (userDetails: { userPhone: string, userAddress: string, deliveryArea?: string, upsells?: string[], forTomorrow?: boolean }) => {
     setIsOrdering(true);
     try {
       const response = await fetch('/api/orders', {
@@ -62,9 +56,11 @@ export default function App() {
         body: JSON.stringify({
           userPhone: userDetails.userPhone,
           userAddress: userDetails.userAddress,
+          deliveryArea: userDetails.deliveryArea || selectedHub,
           hubName: selectedHub,
           quantity: cartCount,
-          upsells: upsells
+          upsells: userDetails.upsells || [],
+          forTomorrow: userDetails.forTomorrow ?? forTomorrow
         })
       });
 
@@ -98,15 +94,14 @@ export default function App() {
             )}
             <Checkout
               quantity={cartCount}
-              upsells={upsells}
-              setUpsells={setUpsells}
+              forTomorrow={forTomorrow}
+              hubName={selectedHub}
               onBack={() => setCurrentScreen("home")}
               onPay={handleCompleteOrder}
             />
           </div>
         )}
         {currentScreen === "success" && <Success onReset={() => setCurrentScreen("home")} orderDetails={{ _id: createdOrderId, quantity: cartCount, hub: selectedHub }} />}
-        {currentScreen === "missed" && <MissedCutoff onPreOrder={() => setCurrentScreen("home")} />}
       </div>
     </main>
   );

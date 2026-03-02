@@ -2,10 +2,15 @@
 
 import { useState } from "react";
 import { ChevronLeft, Check, Plus, Phone, MapPin } from "lucide-react";
+import { TANUKU_AREAS } from "@/lib/locations";
 
-export default function Checkout({ quantity, upsells, setUpsells, onBack, onPay }: any) {
+export default function Checkout({ quantity, onBack, onPay, forTomorrow = false, hubName = "" }: any) {
     const [phone, setPhone] = useState("");
     const [address, setAddress] = useState("");
+    const [deliveryArea, setDeliveryArea] = useState(TANUKU_AREAS[0].name);
+    const [upsells, setUpsells] = useState<string[]>([]);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
     const toggleUpsell = (item: string) => {
         if (upsells.includes(item)) {
             setUpsells(upsells.filter((i: string) => i !== item));
@@ -23,7 +28,10 @@ export default function Checkout({ quantity, upsells, setUpsells, onBack, onPay 
                 <button onClick={onBack} className="w-10 h-10 bg-neutral-900 rounded-full flex items-center justify-center text-white hover:bg-neutral-800">
                     <ChevronLeft className="w-6 h-6" />
                 </button>
-                <h2 className="text-2xl font-bold">Finalize Order</h2>
+                <div>
+                    <h2 className="text-2xl font-bold">Finalize Order</h2>
+                    {forTomorrow && <p className="text-indigo-400 text-xs font-semibold mt-0.5">🌙 Reserving for Tomorrow</p>}
+                </div>
             </div>
 
             <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-5 mb-8 shadow-xl">
@@ -46,7 +54,7 @@ export default function Checkout({ quantity, upsells, setUpsells, onBack, onPay 
                         {hasItem('egg') && <div className="absolute top-3 right-3 bg-orange-500 rounded-full p-1"><Check className="w-3 h-3 text-white" /></div>}
                         <div className="w-16 h-16 bg-gradient-to-br from-yellow-100 to-yellow-300 rounded-full mb-3 shadow-inner"></div>
                         <p className="font-bold text-sm">Boiled Egg</p>
-                        <p className="text-orange-500 font-bold mt-1 max-w-[auto] flex items-center"><Plus className="w-3 h-3 mr-0.5" />₹15</p>
+                        <p className="text-orange-500 font-bold mt-1 flex items-center"><Plus className="w-3 h-3 mr-0.5" />₹15</p>
                     </div>
 
                     <div
@@ -63,8 +71,28 @@ export default function Checkout({ quantity, upsells, setUpsells, onBack, onPay 
             </div>
 
             <div className="mb-8">
-                <h3 className="font-bold text-lg mb-4 text-white">Delivery Details (Tanuku)</h3>
+                <h3 className="font-bold text-lg mb-4 text-white">Delivery Details</h3>
+                {hubName && (
+                    <div className="flex items-center gap-2 mb-3 px-1">
+                        <span className="text-neutral-500 text-xs">Hub:</span>
+                        <span className="text-orange-400 text-xs font-bold bg-orange-500/10 border border-orange-500/20 px-2.5 py-1 rounded-full">{hubName}</span>
+                    </div>
+                )}
                 <div className="space-y-3">
+                    {/* Delivery Area Selector */}
+                    <div className="relative">
+                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-500 w-5 h-5 z-10 pointer-events-none" />
+                        <select
+                            className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl py-4 pl-12 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all font-medium appearance-none"
+                            value={deliveryArea}
+                            onChange={(e) => setDeliveryArea(e.target.value)}
+                        >
+                            {TANUKU_AREAS.map(area => (
+                                <option key={area.name} value={area.name} className="bg-neutral-900">{area.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                    {/* Phone */}
                     <div className="relative">
                         <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500 w-5 h-5" />
                         <input
@@ -76,11 +104,12 @@ export default function Checkout({ quantity, upsells, setUpsells, onBack, onPay 
                             required
                         />
                     </div>
+                    {/* Specific address / landmark */}
                     <div className="relative">
                         <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500 w-5 h-5" />
                         <input
                             type="text"
-                            placeholder="e.g. IT Dept 3rd floor, or Gate 2"
+                            placeholder="Flat / landmark / building name"
                             className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl py-4 pl-12 pr-4 text-white placeholder:text-neutral-600 focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all font-medium"
                             value={address}
                             onChange={(e) => setAddress(e.target.value)}
@@ -97,11 +126,19 @@ export default function Checkout({ quantity, upsells, setUpsells, onBack, onPay 
                 </div>
 
                 <button
-                    onClick={() => onPay({ userPhone: phone, userAddress: address })}
-                    disabled={!phone || !address || phone.length < 10}
+                    onClick={async () => {
+                        if (isSubmitting) return;
+                        setIsSubmitting(true);
+                        try {
+                            await onPay({ userPhone: phone, userAddress: address, deliveryArea, forTomorrow, upsells });
+                        } finally {
+                            setIsSubmitting(false);
+                        }
+                    }}
+                    disabled={!phone || !address || phone.length < 10 || isSubmitting}
                     className="w-full bg-orange-500 hover:bg-orange-400 disabled:bg-neutral-800 disabled:text-neutral-500 text-white font-bold text-lg rounded-2xl py-5 transition-all shadow-[0_4px_14px_0_rgba(255,87,34,0.39)] hover:shadow-[0_6px_20px_rgba(255,87,34,0.23)] disabled:shadow-none active:scale-95"
                 >
-                    Confirm Order
+                    {isSubmitting ? "Placing Order..." : "Confirm Order"}
                 </button>
             </div>
 
